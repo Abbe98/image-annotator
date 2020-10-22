@@ -24,13 +24,13 @@ Make sure to add / update `config.yaml`.
 
 If the web service is not running for some reason, run the following command:
 ```bash
-webservice --backend=kubernetes python start
+webservice --backend=kubernetes python3.7 start
 ```
 If it’s acting up, try the same command with `restart` instead of `start`.
 
 To update the service, run the following commands after becoming the tool account:
 ```bash
-webservice --backend=kubernetes python shell
+webservice --backend=kubernetes python3.7 shell
 source ~/www/python/venv/bin/activate
 cd ~/www/python/src
 git fetch

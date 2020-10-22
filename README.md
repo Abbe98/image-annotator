@@ -1,7 +1,6 @@
 # Image Annotator
 
 Tool to run image annotation campaigns on Wikimedia Commons, created to gather data for machine learning tasks. This tool is based on [Wikidata Image Positions](https://github.com/lucaswerkmeister/tool-wd-image-positions) and licensed under AGPL-3.0. For the changes made see the git history.
-```
 
 ## Local development setup
 

@@ -9,20 +9,14 @@
      * most likely the inner <img>, rather than occupying the full width of its container
      */
     display: inline-block;
+
+    width: 50%;
 }
 
-.wd-image-positions--image .wd-image-positions--depicted {
-    /* 
-     * don’t show this element by default (unless the user hovers over the image, see below)
-     */
-    visibility: hidden;
-}
-
-.wd-image-positions--image:hover .wd-image-positions--depicted {
-    /*
-     * do show this element if the image is hovered
-     */
-    visibility: visible;
+.wd-image-positions--sidebar {
+    width: 50%;
+    float: right;
+    padding-left: 10px;
 }
 
 .wd-image-positions--image.wd-image-positions--active .wd-image-positions--depicted {

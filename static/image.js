@@ -1,16 +1,38 @@
 function setup() {
     const baseUrl = document.querySelector('link[rel=index]').href.replace(/\/$/, ''),
           loginElement = document.getElementById('login'),
-          csrfTokenElement = document.getElementById('csrf_token');
+          csrfTokenElement = document.getElementById('csrf_token'),
+          subjectImage = document.querySelector('.wd-image-positions--entity').dataset.entityId;
     let EntityInputWidget; // loaded in addNewDepictedForms
 
     function addEditButtons() {
         document.querySelectorAll('.wd-image-positions--depicted-without-region').forEach(addEditButton);
     }
 
+    function addSuggestedButtons() {
+        document.querySelectorAll('.wd-image-positions--depicted-suggested').forEach(addSuggestedButton);
+    }
+
+    function addSuggestedButton(element) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.classList.add('btn', 'btn-secondary', 'btn-sm');
+        button.textContent = 'new';
+        button.addEventListener('click', onClick);
+        element.append(document.createTextNode(' '));
+        element.append(button);
+
+        function onClick() {
+            const depictedId = element.firstChild.dataset.entityId;
+            button.textContent = 'adding...';
+            createDepitcsSatatement(subjectImage, depictedId);
+        }
+    }
+
     function addEditButton(element) {
         const entity = element.closest('.wd-image-positions--entity'),
               depictedId = element.firstChild.dataset.entityId,
+              sidebar = entity.querySelector('.wd-image-positions--sidebar');
               image = entity.querySelector('.wd-image-positions--image');
 
         if (depictedId === undefined && csrfTokenElement === null) {
@@ -65,10 +87,14 @@ function setup() {
                 saveCropper(subject, image, depicted, cropper).then(
                     function() {
                         if (depicted.parentElement) {
+                            const listDepictedWithRegions = document.querySelector('.depicted-with-region');
+                            const depicted = document.createElement('li');
+                            depicted.classList.add('wd-image-positions--depicted-suggested');
+                            //TODO this is broken, to reproduce add regoin to new item
+                            depicted.appendChild(element.querySelector('a'));
                             element.remove();
-                            if (image.querySelectorAll('.wd-image-positions--depicted').length === 1) {
-                                addEditRegionButton(entity);
-                            }
+                            listDepictedWithRegions.append(depicted);
+                            addSuggestedButton(depicted);
                         } else {
                             button.textContent = 'add region';
                             button.classList.remove('wd-image-positions--active');
@@ -87,7 +113,7 @@ function setup() {
                 cropper.destroy();
                 cropper = null;
                 doneCallback();
-                image.classList.remove('wd-image-positions--active');
+                sidebar.classList.remove('wd-image-positions--active');
                 document.removeEventListener('keydown', onKeyDown);
                 button.textContent = 'add region';
                 button.classList.remove('wd-image-positions--active');
@@ -213,8 +239,9 @@ function setup() {
         if (csrfTokenElement === null || loginElement !== null) {
             return;
         }
+        const sidebar = entityElement.querySelector('.wd-image-positions--sidebar');
         const image = entityElement.querySelector('.wd-image-positions--image');
-        if (!image.querySelector('.wd-image-positions--depicted')) {
+        if (!sidebar.querySelector('.wd-image-positions--depicted')) {
             return;
         }
         const button = document.createElement('button');
@@ -224,10 +251,10 @@ function setup() {
         button.addEventListener('click', addEditRegionListeners);
         const buttonWrapper = document.createElement('div');
         buttonWrapper.append(button);
-        entityElement.append(buttonWrapper);
+        sidebar.append(buttonWrapper); // image here is actually the sidebar
         const fieldSet = entityElement.querySelector('fieldset');
         if (fieldSet) {
-            entityElement.append(fieldSet); // move after buttonWrapper
+            sidebar.append(fieldSet); // move after buttonWrapper
         }
 
         function addEditRegionListeners() {
@@ -328,12 +355,6 @@ function setup() {
               itemIdButton = new OO.ui.ButtonWidget({
                   label: 'Add',
               }),
-              somevalueButton = new OO.ui.ButtonWidget({
-                  label: 'Unknown value',
-              }),
-              novalueButton = new OO.ui.ButtonWidget({
-                  label: 'No value',
-              }),
               layout = new OO.ui.FieldsetLayout({
                   items: [
                       new OO.ui.ActionFieldLayout(
@@ -344,27 +365,17 @@ function setup() {
                               invisibleLabel: true,
                           },
                       ),
-                      new OO.ui.FieldLayout(
-                          new OO.ui.ButtonGroupWidget({
-                              items: [
-                                  somevalueButton,
-                                  // novalueButton, // there’s no technical reason not to implement this, but it’s not really useful
-                              ],
-                          }),
-                      ),
                   ],
                   label: 'Add more “depicted” statements:',
               }),
               layoutElement = layout.$element[0];
         itemIdInput.on('enter', addItemId);
         itemIdButton.on('click', addItemId);
-        somevalueButton.on('click', addSomevalue);
-        novalueButton.on('click', addNovalue);
         layout.$header.addClass('col-form-label-sm'); // Bootstrap makes OOUI’s <legend> too large by default
-        entityElement.append(layoutElement);
+        document.querySelector('.wd-image-positions--sidebar').appendChild(layoutElement);
 
         function setAllDisabled(disabled) {
-            for (const widget of [itemIdInput, itemIdButton, somevalueButton, novalueButton]) {
+            for (const widget of [itemIdInput, itemIdButton]) {
                 widget.setDisabled(disabled);
             }
         }
@@ -376,18 +387,6 @@ function setup() {
             addStatement(formData);
         }
 
-        function addSomevalue() {
-            const formData = new FormData();
-            formData.append('snaktype', 'somevalue');
-            addStatement(formData);
-        }
-
-        function addNovalue() {
-            const formData = new FormData();
-            formData.append('snaktype', 'novalue');
-            addStatement(formData);
-        }
-
         function addStatement(formData) {
             setAllDisabled(true);
             formData.append('entity_id', subjectId);
@@ -396,6 +395,24 @@ function setup() {
                 method: 'POST',
                 body: formData,
                 credentials: 'include',
+            }).then(response => {
+                if (response.ok) {
+                    return response.json().then(json => {
+                        const statementId = json.depicted.statement_id;
+                        const depictedsWithoutRegionList = document.querySelector('.depicted-no-region');
+                        
+                        const depicted = document.createElement('li');
+                        depicted.classList.add('wd-image-positions--depicted-without-region');
+                        depicted.dataset.statementId = statementId;
+                        depicted.innerHTML = json.depicted_item_link;
+                        depictedsWithoutRegionList.append(depicted);
+                        addEditButton(depicted);
+                    });
+                } else {
+                    return response.text().then(error => {
+                        window.alert(`An error occurred:\n\n${error}`);
+                    });
+                }
             }).then(response => {
                 if (response.ok) {
                     return response.json().then(json => {
@@ -429,6 +446,43 @@ function setup() {
             });
         }
     }
+
+    /* generic function for creating statements */
+    function createDepitcsSatatement(image, target) {
+        const formData = new FormData();
+        formData.append('snaktype', 'value');
+        formData.append('_csrf_token', csrfTokenElement.textContent);
+        formData.append('entity_id', image);
+        formData.append('item_id', target);
+        fetch(`${baseUrl}/api/v1/add_statement/commons.wikimedia.org`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include',
+        }).then(response => {
+            if (response.ok) {
+                return response.json().then(json => {
+                    const statementId = json.depicted.statement_id;
+                    const depictedsWithoutRegionList = document.querySelector('.depicted-no-region');
+                    
+                    const depicted = document.createElement('li');
+                    depicted.classList.add('wd-image-positions--depicted-without-region');
+                    depicted.dataset.statementId = statementId;
+                    depicted.innerHTML = json.depicted_item_link;
+                    depictedsWithoutRegionList.append(depicted);
+                    addEditButton(depicted);
+
+                    const initedBtn = Array.from(document.querySelectorAll('button')).find(el => el.textContent === 'adding...');
+                    initedBtn.textContent = 'new';
+
+                });
+            } else {
+                return response.text().then(error => {
+                    window.alert(`An error occurred:\n\n${error}`);
+                });
+            }
+        });
+    }
+
 
     function addNewDepictedForms() {
         if (csrfTokenElement !== null && loginElement === null) {
@@ -486,6 +540,7 @@ function setup() {
     addEditButtons();
     addEditRegionButtons();
     addNewDepictedForms();
+    addSuggestedButtons();
 }
 
 if (document.readyState === 'loading') {

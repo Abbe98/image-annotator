@@ -3,7 +3,7 @@
   <head>
     {% block head %}
     <meta charset="utf-8">
-    <title>{% block title %}Wikidata Image Positions{% endblock title %}</title>
+    <title>{% block title %}Image Annotator{% endblock title %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <link rel="stylesheet" href="https://tools-static.wmflabs.org/cdnjs/ajax/libs/twitter-bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <link rel="index" href="{{ url_for('index') }}">
@@ -11,11 +11,10 @@
   </head>
   <body>
     <nav class="navbar navbar-expand-sm navbar-dark bg-dark">
-      <a href="{{ url_for('index') }}" class="navbar-brand">Wikidata Image Positions</a>
+      <a href="{{ url_for('index') }}" class="navbar-brand">Image Annotator</a>
       <ul class="navbar-nav mr-auto">
-        <li><a href="https://www.wikidata.org/wiki/User:Lucas_Werkmeister/Wikidata_Image_Positions" class="nav-link">Documentation</a></li>
-        <li><a href="//tools.wmflabs.org/" class="nav-link">Wikimedia Toolforge</a></li>
-        <li><a href="https://phabricator.wikimedia.org/source/tool-wd-image-positions/" class="nav-link">Source code</a></li>
+        <li><a href="#" class="nav-link">Code & License</a></li>
+        <li><a href="#" class="nav-link">Usage</a></li>
       </ul>
       {{ authentication_area() }}
     </nav>
@@ -23,5 +22,7 @@
       {% block main %}
       {% endblock main %}
     </main>
+    {% block final_body %}
+    {% endblock final_body %}
   </body>
 </html>

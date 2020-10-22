@@ -1,0 +1,23 @@
+{% from "image.html" import image %}
+{% extends "images.html" %}
+{% block main %}
+<div class="wd-image-positions--entity" data-entity-id="{{ entity_id }}" data-entity-domain="commons.wikimedia.org">
+  {{ image(image_title, image_attribution, image_url, depicteds, heading="h1") }}
+</div>
+{% endblock main %}
+
+{% block final_body %}
+<script>
+    const fetchJSON = async (url) => await (await fetch(url, { headers: new Headers({ 'Accept': 'application/json' }) })).json();
+    const entityElm = document.querySelector('.wd-image-positions--entity');
+    fetchJSON('{{ url_for('static', filename='target-entities.json') }}').then(data => {
+      const randomImage = data[Math.floor(Math.random() * data.length)];
+      const aElm = document.createElement('a');
+      aElm.classList.add('btn', 'btn-sm', 'btn-block', 'btn-primary');
+      aElm.href = '/editor/' + randomImage;
+      aElm.innerText = 'Next image';
+      aElm.style.marginTop = '14px';
+      entityElm.appendChild(aElm);
+    });
+</script>
+{% endblock %}

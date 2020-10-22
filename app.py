@@ -13,8 +13,6 @@ import requests
 import requests_oauthlib
 import string
 import toolforge
-import urllib.parse
-import urllib.request
 import yaml
 
 from exceptions import *
@@ -26,7 +24,7 @@ app.jinja_env.add_extension('jinja2.ext.do')
 
 app.before_request(toolforge.redirect_to_https)
 
-toolforge.set_user_agent('lexeme-forms', email='mail@lucaswerkmeister.de')
+toolforge.set_user_agent('sgoab-object-annotator', email='albin.larsson@europeana.eu')
 user_agent = requests.utils.default_user_agent()
 
 default_property = 'P18'
@@ -63,159 +61,11 @@ def enableCORS(func, *args, **kwargs):
     return response
 
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
-    if flask.request.method == 'POST':
-        if 'item_id' in flask.request.form:
-            item_id = flask.request.form['item_id']
-            property_id = flask.request.form.get('property_id')
-            if 'manifest' in flask.request.form or 'preview' in flask.request.form:
-                manifest_url = full_url('iiif_manifest_with_property', item_id=item_id, property_id=property_id or default_property)
-                if 'manifest' in flask.request.form:
-                    return flask.redirect(manifest_url)
-                else:
-                    mirador_protocol = 'https' if manifest_url.startswith('https') else 'http'
-                    mirador_url = mirador_protocol + '://tools.wmflabs.org/mirador/?manifest=' + manifest_url
-                    return flask.redirect(mirador_url)
-            else:
-                if property_id:
-                    return flask.redirect(flask.url_for('item_and_property', item_id=item_id, property_id=property_id))
-                else:
-                    return flask.redirect(flask.url_for('item', item_id=item_id))
-        if 'iiif_region' in flask.request.form:
-            iiif_region = flask.request.form['iiif_region']
-            property_id = flask.request.form.get('property_id')
-            if property_id:
-                return flask.redirect(flask.url_for('iiif_region_and_property', iiif_region=iiif_region, property_id=property_id))
-            else:
-                return flask.redirect(flask.url_for('iiif_region', iiif_region=iiif_region))
-        if 'image_title' in flask.request.form:
-            image_title = flask.request.form['image_title']
-            if image_title.startswith('File:'):
-                image_title = image_title[len('File:'):]
-            image_title = image_title.replace(' ', '_')
-            return flask.redirect(flask.url_for('file', image_title=image_title))
     return flask.render_template('index.html')
 
-@app.route('/login')
-def login():
-    redirect, request_token = mwoauth.initiate('https://www.wikidata.org/w/index.php', consumer_token, user_agent=user_agent)
-    flask.session['oauth_request_token'] = dict(zip(request_token._fields, request_token))
-    return flask.redirect(redirect)
-
-@app.route('/oauth/callback')
-def oauth_callback():
-    try:
-        access_token = mwoauth.complete('https://www.wikidata.org/w/index.php', consumer_token, mwoauth.RequestToken(**flask.session.pop('oauth_request_token')), flask.request.query_string, user_agent=user_agent)
-        flask.session['oauth_access_token'] = dict(zip(access_token._fields, access_token))
-        return flask.redirect(flask.url_for('index'))
-    except KeyError:
-        # no oauth_request_token in the session; try to wipe it and hope it works on retry?
-        flask.session.clear()
-        return (flask.Markup(r'<html><p>That didn’t work, sorry. Please try again? <a href="') +
-                flask.Markup.escape(flask.url_for('login')) +
-                flask.Markup(r'">login</a></p><p>You can also try deleting the session cookie, if you know how to do that.</p></html>'))
-
-@app.route('/item/<item_id>')
-def item(item_id):
-    return item_and_property(item_id, property_id=default_property)
-
-@app.route('/item/<item_id>/<property_id>')
-def item_and_property(item_id, property_id):
-    item = load_item_and_property(item_id, property_id, include_depicteds=True)
-    if item is None:
-        return flask.render_template('item-without-image.html',)
-    return flask.render_template('item.html', **item)
-
-@app.route('/iiif/<item_id>/manifest.json')
-def iiif_manifest(item_id):
-    return flask.redirect(flask.url_for('iiif_manifest_with_property', item_id=item_id, property_id=default_property))
-
-@app.route('/iiif/<item_id>/<property_id>/manifest.json')
-def iiif_manifest_with_property(item_id, property_id):
-    item = load_item_and_property(item_id, property_id, include_description=True, include_metadata=True)
-    if item is None:
-        return '', 404
-    manifest = build_manifest(item)
-    resp = flask.jsonify(manifest.toJSON(top=True))
-    resp.headers['Access-Control-Allow-Origin'] = '*'
-    return resp
-
-@app.route('/iiif/<item_id>/list/annotations.json')
-def iiif_annotations(item_id):
-    return iiif_annotations_with_property(item_id, property_id=default_property)
-
-@app.route('/iiif/<item_id>/<property_id>/list/annotations.json')
-def iiif_annotations_with_property(item_id, property_id):
-    item = load_item_and_property(item_id, property_id, include_depicteds=True)
-    # Although the pct canvas is OK for the image API, we need to target
-    # canvas coordinates with the annotations, so we need the w,h
-    image_info = load_image_info(item['image_title'])
-    width, height = int(image_info['thumbwidth']), int(image_info['thumbheight'])
-
-    url = flask.url_for('iiif_annotations_with_property',
-                item_id=item_id, property_id=property_id, _external=True,
-                _scheme=flask.request.headers.get('X-Forwarded-Proto', 'http'))
-    annolist = {
-        '@id': url,
-        '@type': 'sc:AnnotationList',
-        'label': 'Annotations for ' + item['label']['value'],
-        'resources': []
-    }
-    canvas_url = url[:-len('list/annotations.json')] + 'canvas/c0.json'
-    for depicted in item['depicteds']:
-        if 'item_id' not in depicted:
-            continue # somevalue/novalue not supported for now
-        link = 'http://www.wikidata.org/entity/' + flask.Markup.escape(depicted['item_id'])
-        label = depicted['label']['value']
-        # We can put a lot more in here, but minimum for now, and ensure works in Mirador
-        anno = {
-            '@id': '#' + depicted['statement_id'],
-            '@type': 'oa:Annotation',
-            'motivation': 'identifying',
-            'on': canvas_url,
-            'resource': {
-                '@id': link,
-                'format': 'text/plain',
-                'chars': label
-            }
-        }
-        iiif_region = depicted.get('iiif_region', None)
-        if iiif_region:
-            parts = iiif_region.replace('pct:', '').split(',')
-            x = int(float(parts[0])*width/100)
-            y = int(float(parts[1])*height/100)
-            w = int(float(parts[2])*width/100)
-            h = int(float(parts[3])*height/100)
-            anno['on'] = anno['on'] + '#xywh=' + ','.join(str(d) for d in [x,y,w,h])
-        annolist['resources'].append(anno)
-    resp = flask.jsonify(annolist)
-    resp.headers['Access-Control-Allow-Origin'] = '*'
-    return resp
-
-@app.route('/iiif_region/<iiif_region>')
-def iiif_region(iiif_region):
-    return iiif_region_and_property(iiif_region, default_property)
-
-@app.route('/iiif_region/<iiif_region>/<property_id>')
-def iiif_region_and_property(iiif_region, property_id):
-    query = 'SELECT DISTINCT ?item WHERE { ?item p:P180/pq:P2677 "' + iiif_region.replace('\\', '\\\\').replace('"', '\\"') + '". }'
-    with urllib.request.urlopen('https://query.wikidata.org/sparql?format=json&query=' + urllib.parse.quote(query)) as request:
-        query_results = json.load(request)
-
-    items = []
-    items_without_image = []
-    for result in query_results['results']['bindings']:
-        item_id = result['item']['value'][len('http://www.wikidata.org/entity/'):]
-        item = load_item_and_property(item_id, property_id, include_depicteds=True)
-        if item is None:
-            items_without_image.append(item_id)
-        else:
-            items.append(item)
-
-    return flask.render_template('iiif_region.html', items=items, items_without_image=items_without_image)
-
-@app.route('/file/<image_title>')
+@app.route('/editor/<image_title>')
 def file(image_title):
     image_title_ = image_title.replace(' ', '_')
     if image_title_.startswith('File:'):
@@ -225,7 +75,26 @@ def file(image_title):
     file = load_file(image_title.replace('_', ' '))
     if not file:
         return flask.render_template('file-not-found.html', title=image_title), 404
-    return flask.render_template('file.html', **file)
+    return flask.render_template('editor.html', **file)
+
+@app.route('/login')
+def login():
+    redirect, request_token = mwoauth.initiate('https://commons.wikimedia.org/w/index.php', consumer_token, user_agent=user_agent)
+    flask.session['oauth_request_token'] = dict(zip(request_token._fields, request_token))
+    return flask.redirect(redirect)
+
+@app.route('/oauth-callback')
+def oauth_callback():
+    try:
+        access_token = mwoauth.complete('https://commons.wikimedia.org/w/index.php', consumer_token, mwoauth.RequestToken(**flask.session.pop('oauth_request_token')), flask.request.query_string, user_agent=user_agent)
+        flask.session['oauth_access_token'] = dict(zip(access_token._fields, access_token))
+        return flask.redirect(flask.url_for('index'))
+    except KeyError:
+        # no oauth_request_token in the session; try to wipe it and hope it works on retry?
+        flask.session.clear()
+        return (flask.Markup(r'<html><p>That didn’t work, sorry. Please try again? <a href="') +
+                flask.Markup.escape(flask.url_for('login')) +
+                flask.Markup(r'">login</a></p><p>You can also try deleting the session cookie, if you know how to do that.</p></html>'))
 
 @app.route('/api/v1/depicteds_html/file/<image_title>')
 @enableCORS
@@ -320,7 +189,7 @@ def api_add_qualifier(domain):
         response = session.post(action='wbsetqualifier', claim=statement_id, property='P2677',
                                 snaktype='value', value=('"' + iiif_region + '"'),
                                 **({'snakhash': qualifier_hash} if qualifier_hash else {}),
-                                summary='region drawn manually using [[d:User:Lucas Werkmeister/Wikidata Image Positions|Wikidata Image Positions tool]]',
+                                summary='region drawn manually using Image Annotator',
                                 token=token)
     except mwapi.errors.APIError as error:
         if error.code == 'no-such-qualifier':
@@ -391,7 +260,7 @@ def authentication_area():
 
     access_token = mwoauth.AccessToken(**flask.session['oauth_access_token'])
     try:
-        identity = mwoauth.identify('https://www.wikidata.org/w/index.php',
+        identity = mwoauth.identify('https://commons.wikimedia.org/w/index.php',
                                     consumer_token,
                                     access_token)
     except mwoauth.OAuthException:
@@ -430,7 +299,7 @@ def load_item_and_property(item_id, property_id,
     if include_description:
         props.append('descriptions')
 
-    session = anonymous_session('www.wikidata.org')
+    session = anonymous_session('commons.wikimedia.org')
     api_response = session.get(action='wbgetentities',
                                props=props,
                                ids=item_id,

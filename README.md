@@ -1,7 +1,6 @@
 # Image Annotator
 
 Tool to run image annotation campaigns on Wikimedia Commons, created to gather data for machine learning tasks. This tool is based on [Wikidata Image Positions](https://github.com/lucaswerkmeister/tool-wd-image-positions) and licensed under AGPL-3.0. For the changes made see the git history.
-```
 
 ## Local development setup
 
@@ -25,20 +24,20 @@ Make sure to add / update `config.yaml`.
 
 If the web service is not running for some reason, run the following command:
 ```bash
-webservice --backend=kubernetes python start
+webservice --backend=kubernetes python3.7 start
 ```
 If it’s acting up, try the same command with `restart` instead of `start`.
 
 To update the service, run the following commands after becoming the tool account:
 ```bash
-webservice --backend=kubernetes python shell
+webservice --backend=kubernetes python3.7 shell
 source ~/www/python/venv/bin/activate
 cd ~/www/python/src
 git fetch
 git diff @ @{u} # inspect changes
 git merge --ff-only @{u}
 pip3 install -r requirements.txt
-webservice --backend=kubernetes python restart
+webservice --backend=kubernetes python3.7 restart
 ```
 
 ## License

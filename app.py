@@ -22,8 +22,6 @@ import messages
 app = flask.Flask(__name__)
 app.jinja_env.add_extension('jinja2.ext.do')
 
-app.before_request(toolforge.redirect_to_https)
-
 toolforge.set_user_agent('sgoab-object-annotator', email='albin.larsson@europeana.eu')
 user_agent = requests.utils.default_user_agent()
 
